@@ -6,6 +6,8 @@ const Skill = require('../entities/Skill')
 const Coach = require('../entities/Coach')
 const User = require('../entities/User')
 const Course = require('../entities/Course')
+const CreditPurchase = require('../entities/CreditPurchase')
+const CourseBooking = require('../entities/CourseBooking')
 
 
 const dataSource = new DataSource({
@@ -22,7 +24,9 @@ const dataSource = new DataSource({
     Skill,
     Course,
     Coach,
-    User
+    User,
+    CreditPurchase,
+    CourseBooking
   ],
   ssl: config.get('db.ssl')
 })

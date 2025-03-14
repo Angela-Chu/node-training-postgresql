@@ -1,8 +1,15 @@
 const express = require('express')
 
 const router = express.Router()
+const config = require('../config/index')
 const { dataSource } = require('../db/data-source')
 const logger = require('../utils/logger')('Admin')
+const auth = require('../middlewares/auth')({
+  secret: config.get('secret').jwtSecret,
+  userRepository: dataSource.getRepository('User'),
+  logger
+})
+const isCoach = require('../middlewares/isCoach')
 
 function isUndefined (value) {
   return value === undefined
@@ -16,50 +23,30 @@ function isNotValidInteger (value) {
   return typeof value !== 'number' || value < 0 || value % 1 !== 0
 }
 
-router.post('/coaches/courses', async (req, res, next) => {
+router.post('/coaches/courses', auth, isCoach, async (req, res, next) => {
   try {
+    const { id } = req.user
     const {
-      user_id: userId, skill_id: skillId, name, description, start_at: startAt, end_at: endAt,
+      skill_id: skillId, name, description, start_at: startAt, end_at: endAt,
       max_participants: maxParticipants, meeting_url: meetingUrl
     } = req.body
-    if (isUndefined(userId) || isNotValidSting(userId) ||
-      isUndefined(skillId) || isNotValidSting(skillId) ||
+    if (isUndefined(skillId) || isNotValidSting(skillId) ||
       isUndefined(name) || isNotValidSting(name) ||
       isUndefined(description) || isNotValidSting(description) ||
       isUndefined(startAt) || isNotValidSting(startAt) ||
       isUndefined(endAt) || isNotValidSting(endAt) ||
       isUndefined(maxParticipants) || isNotValidInteger(maxParticipants) ||
       isUndefined(meetingUrl) || isNotValidSting(meetingUrl) || !meetingUrl.startsWith('https')) {
-      logger.warn('Äæ¦ì¥¼¶ñ¼g¥¿½T')
+      logger.warn('æ¬„ä½æœªå¡«å¯«æ­£ç¢º')
       res.status(400).json({
         status: 'failed',
-        message: 'Äæ¦ì¥¼¶ñ¼g¥¿½T'
-      })
-      return
-    }
-    const userRepository = dataSource.getRepository('User')
-    const existingUser = await userRepository.findOne({
-      select: ['id', 'name', 'role'],
-      where: { id: userId }
-    })
-    if (!existingUser) {
-      logger.warn('¨Ï¥ÎªÌ¤£¦s¦b')
-      res.status(400).json({
-        status: 'failed',
-        message: '¨Ï¥ÎªÌ¤£¦s¦b'
-      })
-      return
-    } else if (existingUser.role !== 'COACH') {
-      logger.warn('¨Ï¥ÎªÌ©|¥¼¦¨¬°±Ð½m')
-      res.status(400).json({
-        status: 'failed',
-        message: '¨Ï¥ÎªÌ©|¥¼¦¨¬°±Ð½m'
+        message: 'æ¬„ä½æœªå¡«å¯«æ­£ç¢º'
       })
       return
     }
     const courseRepo = dataSource.getRepository('Course')
     const newCourse = courseRepo.create({
-      user_id: userId,
+      user_id: id,
       skill_id: skillId,
       name,
       description,
@@ -84,8 +71,9 @@ router.post('/coaches/courses', async (req, res, next) => {
   }
 })
 
-router.put('/coaches/courses/:courseId', async (req, res, next) => {
+router.put('/coaches/courses/:courseId', auth, isCoach, async (req, res, next) => {
   try {
+    const { id } = req.user
     const { courseId } = req.params
     const {
       skill_id: skillId, name, description, start_at: startAt, end_at: endAt,
@@ -99,22 +87,22 @@ router.put('/coaches/courses/:courseId', async (req, res, next) => {
       isUndefined(endAt) || isNotValidSting(endAt) ||
       isUndefined(maxParticipants) || isNotValidInteger(maxParticipants) ||
       isUndefined(meetingUrl) || isNotValidSting(meetingUrl) || !meetingUrl.startsWith('https')) {
-      logger.warn('Äæ¦ì¥¼¶ñ¼g¥¿½T')
+      logger.warn('æ¬„ä½æœªå¡«å¯«æ­£ç¢º')
       res.status(400).json({
         status: 'failed',
-        message: 'Äæ¦ì¥¼¶ñ¼g¥¿½T'
+        message: 'æ¬„ä½æœªå¡«å¯«æ­£ç¢º'
       })
       return
     }
     const courseRepo = dataSource.getRepository('Course')
     const existingCourse = await courseRepo.findOne({
-      where: { id: courseId }
+      where: { id: courseId, user_id: id }
     })
     if (!existingCourse) {
-      logger.warn('½Òµ{¤£¦s¦b')
+      logger.warn('èª²ç¨‹ä¸å­˜åœ¨')
       res.status(400).json({
         status: 'failed',
-        message: '½Òµ{¤£¦s¦b'
+        message: 'èª²ç¨‹ä¸å­˜åœ¨'
       })
       return
     }
@@ -130,10 +118,10 @@ router.put('/coaches/courses/:courseId', async (req, res, next) => {
       meeting_url: meetingUrl
     })
     if (updateCourse.affected === 0) {
-      logger.warn('§ó·s½Òµ{¥¢±Ñ')
+      logger.warn('æ›´æ–°èª²ç¨‹å¤±æ•—')
       res.status(400).json({
         status: 'failed',
-        message: '§ó·s½Òµ{¥¢±Ñ'
+        message: 'æ›´æ–°èª²ç¨‹å¤±æ•—'
       })
       return
     }
@@ -157,18 +145,18 @@ router.post('/coaches/:userId', async (req, res, next) => {
     const { userId } = req.params
     const { experience_years: experienceYears, description, profile_image_url: profileImageUrl = null } = req.body
     if (isUndefined(experienceYears) || isNotValidInteger(experienceYears) || isUndefined(description) || isNotValidSting(description)) {
-      logger.warn('Äæ¦ì¥¼¶ñ¼g¥¿½T')
+      logger.warn('æ¬„ä½æœªå¡«å¯«æ­£ç¢º')
       res.status(400).json({
         status: 'failed',
-        message: 'Äæ¦ì¥¼¶ñ¼g¥¿½T'
+        message: 'æ¬„ä½æœªå¡«å¯«æ­£ç¢º'
       })
       return
     }
     if (profileImageUrl && !isNotValidSting(profileImageUrl) && !profileImageUrl.startsWith('https')) {
-      logger.warn('¤jÀY¶Kºô§}¿ù»~')
+      logger.warn('å¤§é ­è²¼ç¶²å€éŒ¯èª¤')
       res.status(400).json({
         status: 'failed',
-        message: 'Äæ¦ì¥¼¶ñ¼g¥¿½T'
+        message: 'æ¬„ä½æœªå¡«å¯«æ­£ç¢º'
       })
       return
     }
@@ -178,17 +166,17 @@ router.post('/coaches/:userId', async (req, res, next) => {
       where: { id: userId }
     })
     if (!existingUser) {
-      logger.warn('¨Ï¥ÎªÌ¤£¦s¦b')
+      logger.warn('ä½¿ç”¨è€…ä¸å­˜åœ¨')
       res.status(400).json({
         status: 'failed',
-        message: '¨Ï¥ÎªÌ¤£¦s¦b'
+        message: 'ä½¿ç”¨è€…ä¸å­˜åœ¨'
       })
       return
     } else if (existingUser.role === 'COACH') {
-      logger.warn('¨Ï¥ÎªÌ¤w¸g¬O±Ð½m')
+      logger.warn('ä½¿ç”¨è€…å·²ç¶“æ˜¯æ•™ç·´')
       res.status(409).json({
         status: 'failed',
-        message: '¨Ï¥ÎªÌ¤w¸g¬O±Ð½m'
+        message: 'ä½¿ç”¨è€…å·²ç¶“æ˜¯æ•™ç·´'
       })
       return
     }
@@ -206,10 +194,10 @@ router.post('/coaches/:userId', async (req, res, next) => {
       role: 'COACH'
     })
     if (updatedUser.affected === 0) {
-      logger.warn('§ó·s¨Ï¥ÎªÌ¥¢±Ñ')
+      logger.warn('æ›´æ–°ä½¿ç”¨è€…å¤±æ•—')
       res.status(400).json({
         status: 'failed',
-        message: '§ó·s¨Ï¥ÎªÌ¥¢±Ñ'
+        message: 'æ›´æ–°ä½¿ç”¨è€…å¤±æ•—'
       })
       return
     }
